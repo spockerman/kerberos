@@ -2,6 +2,7 @@ package br.kerberos.keycloak.ldap;
 
 import org.jboss.logging.Logger;
 import org.keycloak.component.ComponentModel;
+import org.keycloak.models.AbstractKeycloakTransaction;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.OrganizationModel;
 import org.keycloak.models.RealmModel;
@@ -17,10 +18,8 @@ import org.keycloak.storage.ldap.mappers.AbstractLDAPStorageMapper;
  * todo usuário importado do LDAP do cliente vira membro da Organization (tenant) do cliente,
  * e o token passa a trazer o claim {@code organization} como acontece com os demais usuários.
  *
- * <p>A filiação NÃO é feita em {@link #onImportUserFromLDAP}: nesse momento o Keycloak ainda não gravou o
- * vínculo do usuário com a federação, e mexer na Organization ali deixa no cache um usuário "não federado"
- * (a senha passa a ser validada localmente e o login falha). O import só marca o usuário como pendente;
- * a filiação acontece em {@link #proxy}, chamado logo depois que o import termina.
+ * <p>A filiação é agendada para o fim da transação: durante o import o Keycloak ainda não terminou de
+ * montar o usuário (vínculo com a federação, cache, proxy), e mexer na Organization nesse momento quebra o login.
  */
 public class OrganizationLDAPStorageMapper extends AbstractLDAPStorageMapper {
 
@@ -34,22 +33,32 @@ public class OrganizationLDAPStorageMapper extends AbstractLDAPStorageMapper {
 
     @Override
     public void onImportUserFromLDAP(LDAPObject ldapUser, UserModel user, RealmModel realm, boolean isCreate) {
-        getSession().setAttribute(pendingKey(user.getId()), Boolean.TRUE);
+        KeycloakSession session = getSession();
+        String realmId = realm.getId();
+        String userId = user.getId();
+
+        session.getTransactionManager().enlistPrepare(new AbstractKeycloakTransaction() {
+            @Override
+            protected void commitImpl() {
+                RealmModel currentRealm = session.realms().getRealm(realmId);
+                withRealm(session, currentRealm, () -> {
+                    UserModel imported = session.users().getUserById(currentRealm, userId);
+                    if (imported != null) {
+                        addMembership(session, imported);
+                    }
+                });
+            }
+
+            @Override
+            protected void rollbackImpl() {
+                // Import desfeito: nada a filiar
+            }
+        });
     }
 
     @Override
     public UserModel proxy(LDAPObject ldapUser, UserModel delegate, RealmModel realm) {
-        KeycloakSession session = getSession();
-        String key = pendingKey(delegate.getId());
-        if (session.getAttribute(key) != null) {
-            session.removeAttribute(key); // antes de filiar: evita repetir se o Keycloak recarregar o usuário
-            withRealm(session, realm, () -> addMembership(session, delegate));
-        }
         return delegate;
-    }
-
-    private static String pendingKey(String userId) {
-        return "kerberos.organization-membership.pending." + userId;
     }
 
     private static void withRealm(KeycloakSession session, RealmModel realm, Runnable action) {
