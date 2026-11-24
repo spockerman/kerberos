@@ -16,3 +16,17 @@ variable "smtp_host" {
   type        = string
   default     = "mailpit"
 }
+
+variable "initech_client_secret" {
+  description = "Segredo do client do Kerberos no IdP simulado da Initech. SOMENTE ambiente local."
+  type        = string
+  default     = "segredo-local-initech"
+  sensitive   = true
+}
+
+variable "umbrella_ldap_password" {
+  description = "Senha do admin do LDAP simulado da Umbrella (container ldap-umbrella). SOMENTE ambiente local."
+  type        = string
+  default     = "admin-umbrella"
+  sensitive   = true
+}
