@@ -57,8 +57,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Construir imagens (com novas tentativas se a rede falhar)
+        run: |
+          for attempt in 1 2 3; do
+            docker compose build && exit 0
+            echo "Build falhou (tentativa $attempt); tentando de novo em 20s..."
+            sleep 20
+          done
+          exit 1
+
       - name: Subir o ambiente
-        run: docker compose up -d --build
+        run: docker compose up -d
 
       - name: Aguardar Terraform e API
         run: |
@@ -78,6 +87,8 @@ jobs:
 
       - name: Teste de fumaça
         run: python3 scripts/smoke-test.py
+        env:
+          SMOKE_VERBOSE: "1"
 
       - name: Logs (em caso de falha)
         if: failure()

@@ -31,10 +31,13 @@ Componentes:
 | Componente | Responsabilidade | Pasta |
 |---|---|---|
 | Imagem Docker corporativa | Keycloak oficial + tema + providers, já com `kc.sh build` | `keycloak/` |
+| Providers próprios | Extensões Java do Keycloak (ex.: mapper LDAP → Organization) | `keycloak/providers/` |
 | Design system | Tokens visuais (`tokens.css`), fonte Outfit e regras de uso | `design-system/` |
 | Tema (Keycloakify) | Telas de login no layout da empresa (tema `kerberos`) | `theme/` |
 | Realm golden | Template de realm em Terraform (tema, senha, brute force, tokens, roles, eventos, SMTP, Organizations) | `infra/terraform/modules/realm-golden/` |
 | Client de SPA | Módulo de client público (PKCE + audience da API + escopo `organization`) | `infra/terraform/modules/spa-app/` |
+| Tenant (cliente) | Organization + login do cliente: IdP OIDC/SAML ou LDAP | `infra/terraform/modules/tenant/` |
+| Clientes simulados | IdP e LDAP falsos para testar a federação localmente | `infra/terraform/envs/local/simulated-customers.tf`, `infra/local/` |
 | Ambientes | Composição dos módulos por ambiente (dev, hml, prd) | `infra/terraform/envs/` |
 | Portal de Provisionamento | Formulário web que cria realm/clients/organizations e gera o `.env` | `portal/` |
 | Starters/SDKs | Bibliotecas que validam JWT, extraem tenant e checam roles | `starters/` |
@@ -76,7 +79,7 @@ Mudar qualquer item acima exige um ADR em `docs/adr/NNNN-titulo.md` (contexto, d
 | Fase | Entrega | Status |
 |---|---|---|
 | 1 | Imagem Docker + tema + realm golden + ambiente local (v0.1) | ✅ concluída — CI ponta a ponta verde |
-| 2 | Organizations + federação por cliente no template | 🟨 Organizations prontas; falta IdP/LDAP por organização |
+| 2 | Organizations + federação por cliente (módulo `tenant`: IdP OIDC/SAML e LDAP) | ✅ concluída — OIDC e LDAP testados ponta a ponta; SAML sem teste automatizado |
 | 3 | Portal de provisionamento + geração do `.env` | ⬜ |
 | 4 | Starters e SDKs das stacks | ⬜ |
 
@@ -158,7 +161,14 @@ de forma leve: regras e chamadas de API fora dos componentes de tela.
 ### Nomes
 - Realm: `<sistema>` em kebab-case (ex.: `financeiro`, `ead-portal`).
 - Client: `<sistema>-<tipo>` → `-web` (SPA, público + PKCE), `-api` (bearer-only/confidencial), `-mobile`, `-svc` (service account).
-- Organization: alias estável do cliente em kebab-case; nunca usar dados pessoais no alias.
+- Organization: alias estável do cliente em kebab-case; nunca usar dados pessoais no alias. IdP do cliente: `<alias>-idp`.
+
+### Clientes (tenants)
+- Todo cliente é uma instância do módulo `tenant` — nunca `keycloak_organization` solto.
+- Ordem de preferência para o login do cliente: **IdP OIDC** (Entra ID, Google Workspace, Okta) → **SAML** (ADFS) → **LDAP** → usuários locais.
+- IdP do cliente fica **oculto** na tela de login; o usuário chega a ele digitando um e-mail do domínio do cliente.
+- `keycloak_organization_memberships` só para tenants de usuários locais: ele é autoritativo e removeria quem entrou pelo IdP/LDAP.
+- Segredos do cliente (client secret do IdP, senha de bind do LDAP) entram como variáveis sensíveis, nunca no código.
 - Roles de realm padrão: `admin`, `gestor`, `usuario`. Roles específicas do sistema ficam no client.
 - Recursos Terraform: `snake_case`; variáveis documentadas com `description`.
 
@@ -202,7 +212,7 @@ de forma leve: regras e chamadas de API fora dos componentes de tela.
 - Ambiente local sobe com um comando (`docker compose up --build`) e já aplica o realm golden.
 - `scripts/smoke-test.py` precisa passar antes de qualquer merge (o CI roda a cada push).
 - Toda mudança no template deve ser testada aplicando-o num realm descartável.
-- Testes mínimos: login com usuário local, login via IdP de uma Organization, claim `organization` presente no token, roles corretas.
+- Testes mínimos: login com usuário local, login via IdP de uma Organization, login via LDAP de uma Organization, claim `organization` presente no token, roles corretas.
 - Starters têm testes de validação de JWT, extração de tenant e checagem de roles.
 
 ---

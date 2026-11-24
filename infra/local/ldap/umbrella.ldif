@@ -1,0 +1,17 @@
+# LDAP SIMULADO do cliente "Umbrella" — só ambiente local.
+# A base dc=umbrella,dc=test e o admin são criados pela imagem (LDAP_DOMAIN / LDAP_ADMIN_PASSWORD).
+
+dn: ou=people,dc=umbrella,dc=test
+objectClass: organizationalUnit
+ou: people
+
+dn: uid=eva,ou=people,dc=umbrella,dc=test
+objectClass: inetOrgPerson
+objectClass: organizationalPerson
+objectClass: person
+uid: eva
+cn: Eva Rocha
+givenName: Eva
+sn: Rocha
+mail: eva@umbrella.test
+userPassword: Senha@Demo2026!

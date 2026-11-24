@@ -25,32 +25,85 @@ module "demo_app" {
   organization_scope_name = module.realm.organization_scope_name
 }
 
-# ---------- Tenants de exemplo ----------
-locals {
-  organizations = {
-    acme   = { name = "Acme", domain = "acme.test" }
-    globex = { name = "Globex", domain = "globex.test" }
+# ---------- Tenants (clientes) de exemplo ----------
+# acme e globex: usuários locais do Keycloak.
+# initech: login pelo IdP do próprio cliente (OIDC) — simulado pelo realm initech-idp (simulated-customers.tf).
+# umbrella: login pelo LDAP do próprio cliente — simulado pelo container ldap-umbrella.
+module "tenant" {
+  source = "../../modules/tenant"
+
+  for_each = {
+    acme   = { name = "Acme", domains = ["acme.test"] }
+    globex = { name = "Globex", domains = ["globex.test"] }
   }
+
+  realm_id   = module.realm.realm_id
+  realm_name = module.realm.realm_name
+  alias      = each.key
+  name       = each.value.name
+  domains    = each.value.domains
+}
+
+module "tenant_initech" {
+  source = "../../modules/tenant"
+
+  realm_id   = module.realm.realm_id
+  realm_name = module.realm.realm_name
+  alias      = "initech"
+  name       = "Initech"
+  domains    = ["initech.test"]
+
+  identity_provider = {
+    type              = "oidc"
+    display_name      = "Initech (SSO corporativo)"
+    issuer            = "${local.keycloak_public_url}/realms/initech-idp"
+    authorization_url = "${local.keycloak_public_url}/realms/initech-idp/protocol/openid-connect/auth"
+    token_url         = "${local.keycloak_public_url}/realms/initech-idp/protocol/openid-connect/token"
+    jwks_url          = "${local.keycloak_public_url}/realms/initech-idp/protocol/openid-connect/certs"
+    user_info_url     = "${local.keycloak_public_url}/realms/initech-idp/protocol/openid-connect/userinfo"
+    logout_url        = "${local.keycloak_public_url}/realms/initech-idp/protocol/openid-connect/logout"
+    client_id         = keycloak_openid_client.initech_broker.client_id
+  }
+  identity_provider_client_secret = var.initech_client_secret
+}
+
+module "tenant_umbrella" {
+  source = "../../modules/tenant"
+
+  realm_id   = module.realm.realm_id
+  realm_name = module.realm.realm_name
+  alias      = "umbrella"
+  name       = "Umbrella"
+  domains    = ["umbrella.test"]
+
+  ldap = {
+    connection_url = "ldap://ldap-umbrella:389"
+    users_dn       = "ou=people,dc=umbrella,dc=test"
+    bind_dn        = "cn=admin,dc=umbrella,dc=test"
+  }
+  ldap_bind_credential = var.umbrella_ldap_password
+}
+
+# Antes da Fase 2 as organizações eram recursos soltos; agora vêm do módulo tenant.
+moved {
+  from = keycloak_organization.this["acme"]
+  to   = module.tenant["acme"].keycloak_organization.this
+}
+
+moved {
+  from = keycloak_organization.this["globex"]
+  to   = module.tenant["globex"].keycloak_organization.this
+}
+
+# ---------- Usuários locais de teste ----------
+locals {
+  keycloak_public_url = "http://localhost:8080"
 
   # username => dados, organizações e roles. Carla está em duas organizações (testa a escolha de tenant).
   users = {
     ana   = { first = "Ana", last = "Souza", email = "ana@acme.test", orgs = ["acme"], roles = ["admin"] }
     bruno = { first = "Bruno", last = "Lima", email = "bruno@globex.test", orgs = ["globex"], roles = [] }
     carla = { first = "Carla", last = "Mendes", email = "carla@acme.test", orgs = ["acme", "globex"], roles = ["gestor"] }
-  }
-}
-
-resource "keycloak_organization" "this" {
-  for_each = local.organizations
-
-  realm   = module.realm.realm_name
-  name    = each.value.name
-  alias   = each.key
-  enabled = true
-
-  domain {
-    name     = each.value.domain
-    verified = true
   }
 }
 
@@ -80,10 +133,12 @@ resource "keycloak_user_roles" "this" {
   role_ids   = [for r in each.value.roles : module.realm.role_ids[r]]
 }
 
+# Só para tenants de usuários locais. Em initech/umbrella os membros entram pelo IdP/LDAP do cliente;
+# este recurso é autoritativo e removeria esses membros.
 resource "keycloak_organization_memberships" "this" {
-  for_each = local.organizations
+  for_each = module.tenant
 
   realm_id        = module.realm.realm_id
-  organization_id = keycloak_organization.this[each.key].id
+  organization_id = each.value.organization_id
   members         = [for username, u in local.users : keycloak_user.this[username].username if contains(u.orgs, each.key)]
 }

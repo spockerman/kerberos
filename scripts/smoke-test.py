@@ -26,6 +26,7 @@ REDIRECT_URI = os.environ.get("REDIRECT_URI", "http://localhost:3000/")
 API = os.environ.get("API_URL", "http://localhost:8081")
 WEB = os.environ.get("WEB_URL", "http://localhost:3000")
 PASSWORD = os.environ.get("DEMO_PASSWORD", "Senha@Demo2026!")
+VERBOSE = os.environ.get("SMOKE_VERBOSE") == "1"
 
 failures = []
 
@@ -42,32 +43,41 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 class Session:
-    """Cliente HTTP mínimo com cookies. O http.cookiejar do Python recusa cookies de "localhost"
-    (e os marcados Secure em HTTP), então guardamos os cookies aqui, como um navegador em dev faria."""
+    """Cliente HTTP mínimo com cookies por caminho. O http.cookiejar do Python recusa cookies de "localhost"
+    (e os marcados Secure em HTTP), então guardamos os cookies aqui, como um navegador em dev faria.
+    O caminho importa: cada realm do Keycloak usa cookies com o mesmo nome em /realms/<realm>/."""
 
     def __init__(self):
         self.opener = urllib.request.build_opener(NoRedirect())
-        self.cookies = {}
+        self.cookies = {}  # (nome, caminho) -> valor
 
     def open(self, req, timeout):
-        if self.cookies:
-            req.add_header("Cookie", "; ".join(f"{k}={v}" for k, v in self.cookies.items()))
+        path = urllib.parse.urlparse(req.full_url).path or "/"
+        matching = sorted(
+            ((name, cpath, value) for (name, cpath), value in self.cookies.items() if path.startswith(cpath)),
+            key=lambda c: -len(c[1]),  # caminho mais específico primeiro, como no navegador
+        )
+        if matching:
+            req.add_header("Cookie", "; ".join(f"{name}={value}" for name, _, value in matching))
         try:
             resp = self.opener.open(req, timeout=timeout)
         except urllib.error.HTTPError as e:
-            self._store(e.headers)
+            self._store(e.headers, path)
             raise
-        self._store(resp.headers)
+        self._store(resp.headers, path)
         return resp
 
-    def _store(self, headers):
+    def _store(self, headers, request_path):
         for header in headers.get_all("Set-Cookie") or []:
-            name, _, rest = header.partition("=")
-            value = rest.split(";", 1)[0]
-            if value:
-                self.cookies[name.strip()] = value
+            parts = [p.strip() for p in header.split(";")]
+            name, _, value = parts[0].partition("=")
+            attrs = {k.lower(): v for k, _, v in (p.partition("=") for p in parts[1:])}
+            cpath = attrs.get("path") or request_path.rsplit("/", 1)[0] or "/"
+            expired = "max-age" in attrs and attrs["max-age"].lstrip("-").isdigit() and int(attrs["max-age"]) <= 0
+            if value and not expired:
+                self.cookies[(name, cpath)] = value
             else:
-                self.cookies.pop(name.strip(), None)
+                self.cookies.pop((name, cpath), None)
 
 
 def new_opener():
@@ -77,6 +87,8 @@ def new_opener():
 def request(opener, url, data=None, headers=None):
     body = urllib.parse.urlencode(data).encode() if data is not None else None
     req = urllib.request.Request(url, data=body, headers=headers or {})
+    if VERBOSE:
+        print(f"       {'POST' if body else 'GET '} {urllib.parse.urlparse(url).path} {sorted(data) if data else ''}")
     try:
         resp = opener.open(req, timeout=20)
         with resp:
@@ -102,8 +114,18 @@ def decode_jwt(token):
     return json.loads(base64.urlsafe_b64decode(payload))
 
 
-def login(username, organization=None):
-    """Login pelo formulário do tema. Retorna o access token."""
+def form_action(page):
+    """Ação do formulário da página: kcContext (tema kerberos) ou <form> HTML (tema padrão, ex.: IdP do cliente)."""
+    action = kc_context_value(page, "loginAction")
+    if action:
+        return action
+    match = re.search(r'<form[^>]*action="([^"]+)"', page)
+    return html.unescape(match.group(1)) if match else None
+
+
+def login(username, organization=None, expect_idp_host=None):
+    """Login como um navegador faria. Segue redirecionamentos (inclusive para o IdP do cliente).
+    Retorna o access token."""
     opener = new_opener()
     verifier = secrets.token_urlsafe(48)
     challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
@@ -116,33 +138,49 @@ def login(username, organization=None):
         "code_challenge": challenge,
         "code_challenge_method": "S256",
     }
-    auth_url = f"{KEYCLOAK}/realms/{REALM}/protocol/openid-connect/auth?" + urllib.parse.urlencode(params)
-    status, headers, page = request(opener, auth_url)
+    url = f"{KEYCLOAK}/realms/{REALM}/protocol/openid-connect/auth?" + urllib.parse.urlencode(params)
+    status, headers, page = request(opener, url)
     check(status == 200, f"[{username}] página de login abre (HTTP {status})")
     check("/login/kerberos/" in page, f"[{username}] página usa o tema 'kerberos'")
 
-    # Fluxo pode ter várias etapas (identity-first, senha, escolha de organização)
-    for _ in range(5):
-        action = kc_context_value(page, "loginAction")
-        page_id = kc_context_value(page, "pageId")
-        if not action:
+    code = None
+    visited_idp = False
+    last_message = None
+    for _ in range(12):
+        location = headers.get("Location") or headers.get("location")
+        if status in (301, 302, 303) and location:
+            url = urllib.parse.urljoin(url, location)
+            if url.startswith(REDIRECT_URI):
+                code = urllib.parse.parse_qs(urllib.parse.urlparse(url).query).get("code", [None])[0]
+                break
+            if "/realms/" + REALM + "/" not in url:
+                visited_idp = True
+            status, headers, page = request(opener, url)
+            continue
+
+        action = form_action(page)
+        if VERBOSE:
+            print(f"       ← {status} página={kc_context_value(page, 'pageId')} msg={kc_context_value(page, 'summary')}")
+        if status != 200 or not action:
             summary = kc_context_value(page, "summary")
-            check(False, f"[{username}] formulário encontrado (página {page_id}, mensagem: {summary})")
+            check(False, f"[{username}] formulário encontrado (HTTP {status}, página {kc_context_value(page, 'pageId')}, mensagem: {summary})")
             return None
-        if page_id == "select-organization.ftl":
+        message = kc_context_value(page, "summary")
+        if message and message == last_message:
+            check(False, f"[{username}] login recusado: {message}")
+            return None
+        last_message = message
+        if kc_context_value(page, "pageId") == "select-organization.ftl":
             form = {"kc.org": organization}
         else:
             form = {"username": username, "password": PASSWORD, "credentialId": ""}
-        status, headers, page = request(opener, action, form)
-        location = headers.get("Location") or headers.get("location") or ""
-        if status in (302, 303) and location.startswith(REDIRECT_URI):
-            code = urllib.parse.parse_qs(urllib.parse.urlparse(location).query).get("code", [None])[0]
-            check(code is not None, f"[{username}] login concluído e código recebido")
-            break
-        if status in (302, 303):
-            status, headers, page = request(opener, urllib.parse.urljoin(action, location))
-    else:
-        check(False, f"[{username}] login concluído em até 5 etapas")
+        url = urllib.parse.urljoin(url, action)
+        status, headers, page = request(opener, url, form)
+
+    check(code is not None, f"[{username}] login concluído e código recebido")
+    if expect_idp_host is not None:
+        check(visited_idp, f"[{username}] login passou pelo IdP do cliente")
+    if code is None:
         return None
 
     status, _, body = request(
@@ -202,6 +240,22 @@ def main():
     if token:
         claims = decode_jwt(token)
         check(claims.get("organization") == ["globex"], f"claim organization = ['globex'] (veio {claims.get('organization')})")
+
+    print("Usuário diego — cliente Initech, login pelo IdP do cliente (OIDC)")
+    token = login("diego@initech.test", expect_idp_host="initech-idp")
+    if token:
+        claims = decode_jwt(token)
+        check(claims.get("organization") == ["initech"], f"claim organization = ['initech'] (veio {claims.get('organization')})")
+        check(claims.get("email") == "diego@initech.test", f"e-mail veio do IdP do cliente (veio {claims.get('email')})")
+        status, _ = api("/api/tenants/initech/dashboard", token)
+        check(status == 200, f"API permite o tenant initech (HTTP {status})")
+
+    print("Usuária eva — cliente Umbrella, login pelo LDAP do cliente")
+    token = login("eva")
+    if token:
+        claims = decode_jwt(token)
+        check(claims.get("organization") == ["umbrella"], f"claim organization = ['umbrella'] (veio {claims.get('organization')})")
+        check(claims.get("email") == "eva@umbrella.test", f"e-mail veio do LDAP (veio {claims.get('email')})")
 
     print("Segurança da API")
     status, _ = api("/api/me")
