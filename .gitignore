@@ -3,9 +3,9 @@ node_modules/
 dist/
 dist_keycloak/
 .next/
-out/
+apps/*/out/
 target/
-build/
+apps/*/build/
 *.jar
 !**/gradle/wrapper/*.jar
 !**/.mvn/wrapper/*.jar
