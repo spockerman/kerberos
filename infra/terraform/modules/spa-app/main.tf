@@ -19,9 +19,11 @@ resource "keycloak_openid_client" "web" {
 }
 
 # Escopos sempre presentes no token. "organization" traz o tenant do usuário.
-resource "keycloak_openid_client_default_scopes" "web" {
-  realm_id  = var.realm_id
-  client_id = keycloak_openid_client.web.id
+# Recurso autoritativo: escopos fora destas listas são removidos do client.
+resource "keycloak_client_scope_assignments" "web" {
+  realm_id        = var.realm_id
+  client_id       = keycloak_openid_client.web.id
+  optional_scopes = ["offline_access"]
   default_scopes = [
     "basic",
     "profile",
