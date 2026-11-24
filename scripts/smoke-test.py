@@ -58,8 +58,11 @@ def request(opener, url, data=None, headers=None):
 
 
 def kc_context_value(page, key):
-    """Lê um valor do window.kcContext que o Keycloak injeta na página do tema."""
-    match = re.search(r'"%s"\s*:\s*"([^"]+)"' % re.escape(key), page)
+    """Lê um valor do kcContext que o Keycloak injeta na página do tema (Keycloakify)."""
+    if key == "pageId":
+        match = re.search(r'kcContext\.pageId\s*=\s*"([^"]+)"', page)
+    else:
+        match = re.search(r'"%s"\s*:\s*"([^"]+)"' % re.escape(key), page)
     if not match:
         return None
     return html.unescape(match.group(1).replace("\\/", "/"))
@@ -95,7 +98,8 @@ def login(username, organization=None):
         action = kc_context_value(page, "loginAction")
         page_id = kc_context_value(page, "pageId")
         if not action:
-            check(False, f"[{username}] loginAction encontrado na página {page_id}")
+            summary = kc_context_value(page, "summary")
+            check(False, f"[{username}] formulário encontrado (página {page_id}, mensagem: {summary})")
             return None
         if page_id == "select-organization.ftl":
             form = {"kc.org": organization}
