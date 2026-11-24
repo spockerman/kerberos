@@ -34,6 +34,11 @@ Senha de todos: `Senha@Demo2026!` (só ambiente local).
 | `ana` | Acme | admin |
 | `bruno` | Globex | usuario (padrão) |
 | `carla` | Acme **e** Globex (escolhe no login) | gestor |
+| `diego@initech.test` | Initech — entra pelo **IdP do cliente** (OIDC simulado) | usuario |
+| `eva` | Umbrella — entra pelo **LDAP do cliente** (OpenLDAP simulado) | usuario |
+
+Initech e Umbrella são clientes simulados para testar a federação: o IdP é o realm `initech-idp` no mesmo
+Keycloak e o LDAP é o container `ldap-umbrella`. Em produção, ficam no ambiente do cliente.
 
 ### Conferir tudo de uma vez
 
@@ -65,10 +70,43 @@ docker compose down -v           # para e apaga banco e state (recomeça do zero
 | `design-system/` | Tokens visuais, fonte e identidade (`brand/`) |
 | `infra/terraform/modules/realm-golden/` | Template aplicado a todo sistema novo |
 | `infra/terraform/modules/spa-app/` | Client de uma SPA (PKCE + audience da API) |
-| `infra/terraform/envs/local/` | Ambiente local: realm `demo`, organizations e usuários de teste |
+| `infra/terraform/modules/tenant/` | Cliente (tenant): Organization + IdP OIDC/SAML ou LDAP |
+| `infra/terraform/envs/local/` | Ambiente local: realm `demo`, clientes e usuários de teste |
+| `keycloak/providers/` | Extensões Java do Keycloak (mapper LDAP → Organization) |
 | `apps/demo-api/` | API Spring Boot em Ports and Adapters |
 | `apps/demo-web/` | Front-end Next.js com login OIDC |
 | `scripts/smoke-test.py` | Teste ponta a ponta |
+
+## Cadastrar um cliente (tenant)
+
+Cada cliente é um bloco do módulo `tenant` no ambiente (ex.: `infra/terraform/envs/local/main.tf`):
+
+```hcl
+# Cliente com Microsoft Entra ID (OIDC)
+module "tenant_contoso" {
+  source     = "../../modules/tenant"
+  realm_id   = module.realm.realm_id
+  realm_name = module.realm.realm_name
+  alias      = "contoso"            # vira o claim `organization`
+  name       = "Contoso"
+  domains    = ["contoso.com"]      # quem digitar @contoso.com vai direto para o Entra ID
+
+  identity_provider = {
+    type              = "oidc"
+    issuer            = "https://login.microsoftonline.com/<tenant-id>/v2.0"
+    authorization_url = "https://login.microsoftonline.com/<tenant-id>/oauth2/v2.0/authorize"
+    token_url         = "https://login.microsoftonline.com/<tenant-id>/oauth2/v2.0/token"
+    jwks_url          = "https://login.microsoftonline.com/<tenant-id>/discovery/v2.0/keys"
+    client_id         = "<application-id>"
+  }
+  identity_provider_client_secret = var.contoso_client_secret
+}
+```
+
+No app registrado no IdP do cliente, a URL de retorno é
+`<keycloak>/realms/<realm>/broker/<alias>-idp/endpoint`. Para SAML use `type = "saml"` com `entity_id`,
+`single_sign_on_service_url` e `signing_certificate`; para LDAP/AD, o bloco `ldap` (veja as descrições em
+`infra/terraform/modules/tenant/variables.tf`).
 
 ## Desenvolver o tema
 
