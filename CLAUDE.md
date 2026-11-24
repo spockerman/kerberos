@@ -32,12 +32,16 @@ Componentes:
 |---|---|---|
 | Imagem Docker corporativa | Keycloak oficial + tema + providers, já com `kc.sh build` | `keycloak/` |
 | Design system | Tokens visuais (`tokens.css`), fonte Outfit e regras de uso | `design-system/` |
-| Tema (Keycloakify) | Login, conta e e-mail no layout da empresa; tema **padrão do servidor** | `theme/` |
-| Realm golden | Template de realm em Terraform (fluxos, MFA, senha, roles, scopes, SMTP, eventos) | `infra/terraform/modules/realm-golden/` |
+| Tema (Keycloakify) | Telas de login no layout da empresa (tema `kerberos`) | `theme/` |
+| Realm golden | Template de realm em Terraform (tema, senha, brute force, tokens, roles, eventos, SMTP, Organizations) | `infra/terraform/modules/realm-golden/` |
+| Client de SPA | Módulo de client público (PKCE + audience da API + escopo `organization`) | `infra/terraform/modules/spa-app/` |
 | Ambientes | Composição dos módulos por ambiente (dev, hml, prd) | `infra/terraform/envs/` |
 | Portal de Provisionamento | Formulário web que cria realm/clients/organizations e gera o `.env` | `portal/` |
 | Starters/SDKs | Bibliotecas que validam JWT, extraem tenant e checam roles | `starters/` |
-| Ambiente local | docker-compose com Keycloak + Postgres (+ Mailpit) | `local/` |
+| Ambiente local | `docker-compose.yml` na raiz: Postgres, Keycloak, Terraform, Mailpit e app de exemplo | raiz |
+| App de exemplo | API Spring Boot (`demo-api`) e front Next.js (`demo-web`) que provam o fluxo ponta a ponta | `apps/` |
+| Testes ponta a ponta | Login real pelo tema + validação de token e API | `scripts/smoke-test.py` |
+| CI | Builds, testes, ArchUnit, `terraform validate` e teste ponta a ponta a cada push | `.github/workflows/` |
 | Decisões | ADRs | `docs/adr/` |
 
 > Ao criar uma pasta nova de primeiro nível, atualize esta tabela.
@@ -55,7 +59,9 @@ Componentes:
    User Federation (LDAP/AD).
 5. **Configuração como código**: Terraform (provider oficial `keycloak/keycloak`) é a fonte da verdade.
    Exports JSON do console servem só como referência, nunca como mecanismo de deploy.
-6. **Tema como padrão do servidor**: todo realm nasce com o layout da empresa, sem passo extra.
+6. **Tema aplicado pelo template**: o realm golden define `login_theme = "kerberos"`, então todo realm nasce
+   com o layout da empresa, sem passo extra. (Não usamos o padrão global do servidor: ele vale para todos os
+   tipos de tema — admin, conta — e o nosso só implementa login.)
 7. **Portal usa service account** com o mínimo de permissões (`realm-management` necessárias), nunca
    o usuário admin do realm `master`.
 8. **Arquitetura hexagonal (Ports and Adapters)** em todo código de aplicação (portal e starters). Ver seção 6.
@@ -69,8 +75,8 @@ Mudar qualquer item acima exige um ADR em `docs/adr/NNNN-titulo.md` (contexto, d
 
 | Fase | Entrega | Status |
 |---|---|---|
-| 1 | Imagem Docker + tema + realm golden + ambiente local | ⬜ não iniciada |
-| 2 | Organizations + federação por cliente no template | ⬜ |
+| 1 | Imagem Docker + tema + realm golden + ambiente local (v0.1) | ✅ concluída — CI ponta a ponta verde |
+| 2 | Organizations + federação por cliente no template | 🟨 Organizations prontas; falta IdP/LDAP por organização |
 | 3 | Portal de provisionamento + geração do `.env` | ⬜ |
 | 4 | Starters e SDKs das stacks | ⬜ |
 
@@ -82,13 +88,15 @@ Atualize esta tabela ao concluir cada fase. Não adiante fases: construa sobre o
 
 | Item | Decisão |
 |---|---|
-| Keycloak | **26.8.2** — versão fixada num único lugar (`keycloak/VERSION` ou `.env`) e referenciada no repo todo |
+| Keycloak | **26.8.2** — versão fixada só em `keycloak/Dockerfile` (`ARG KEYCLOAK_VERSION`) |
 | Back-end (portal e sistemas) | **Java + Spring Boot** |
 | Front-end (portal e sistemas) | **React / Next.js** |
 | Tema de login | **Keycloakify** (React), usando os tokens de `design-system/tokens.css` |
 | Design system | `Loanza Design System.html` (raiz) → extraído para `design-system/`. Tema claro apenas, fonte Outfit. **Só referência de estilo** |
 | Identidade (nome, logo) | **Própria, a definir** — placeholders em `design-system/brand/brand.json` |
-| Configuração do Keycloak | **Terraform** (provider `keycloak/keycloak`) |
+| Configuração do Keycloak | **Terraform 1.17.2** (imagem Docker, sem instalação local) + provider `keycloak/keycloak` `~> 5.11` |
+| Versões das apps | Spring Boot 4.1 + Java 21 · Next.js 16 + React 19 · Keycloakify 11 (React 18) · Node 22 |
+| Pré-requisito local | **Só Docker.** Tudo (inclusive Terraform, Maven e Node) roda em containers |
 | Banco | **PostgreSQL** |
 | Produção | **AWS Lightsail** — instância de 4 GB rodando docker-compose (Keycloak + Postgres + proxy reverso com TLS), snapshots automáticos |
 | Infra da AWS como código | Terraform (provider `aws`), separado do Terraform do Keycloak |
@@ -122,7 +130,7 @@ de forma leve: regras e chamadas de API fora dos componentes de tela.
 
 ### Estrutura de pacotes (por feature)
 ```
-<base>.<feature>/
+<base>.<feature>/              # base atual: br.kerberos.<app> (ex.: br.kerberos.demo.me)
   domain/                      # entidades, value objects, regras
   application/
     port/in/                   # interfaces dos casos de uso (comandos/consultas)
@@ -191,7 +199,8 @@ de forma leve: regras e chamadas de API fora dos componentes de tela.
 
 ## 9. Qualidade e testes
 
-- Ambiente local sobe com um comando (`docker compose up`) e já aplica o realm golden.
+- Ambiente local sobe com um comando (`docker compose up --build`) e já aplica o realm golden.
+- `scripts/smoke-test.py` precisa passar antes de qualquer merge (o CI roda a cada push).
 - Toda mudança no template deve ser testada aplicando-o num realm descartável.
 - Testes mínimos: login com usuário local, login via IdP de uma Organization, claim `organization` presente no token, roles corretas.
 - Starters têm testes de validação de JWT, extração de tenant e checagem de roles.
