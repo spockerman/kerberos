@@ -26,6 +26,7 @@ REDIRECT_URI = os.environ.get("REDIRECT_URI", "http://localhost:3000/")
 API = os.environ.get("API_URL", "http://localhost:8081")
 WEB = os.environ.get("WEB_URL", "http://localhost:3000")
 PASSWORD = os.environ.get("DEMO_PASSWORD", "Senha@Demo2026!")
+VERBOSE = os.environ.get("SMOKE_VERBOSE") == "1"
 
 failures = []
 
@@ -77,6 +78,8 @@ def new_opener():
 def request(opener, url, data=None, headers=None):
     body = urllib.parse.urlencode(data).encode() if data is not None else None
     req = urllib.request.Request(url, data=body, headers=headers or {})
+    if VERBOSE:
+        print(f"       {'POST' if body else 'GET '} {urllib.parse.urlparse(url).path} {sorted(data) if data else ''}")
     try:
         resp = opener.open(req, timeout=20)
         with resp:
@@ -146,6 +149,8 @@ def login(username, organization=None, expect_idp_host=None):
             continue
 
         action = form_action(page)
+        if VERBOSE:
+            print(f"       ← {status} página={kc_context_value(page, 'pageId')} msg={kc_context_value(page, 'summary')}")
         if status != 200 or not action:
             summary = kc_context_value(page, "summary")
             check(False, f"[{username}] formulário encontrado (HTTP {status}, página {kc_context_value(page, 'pageId')}, mensagem: {summary})")

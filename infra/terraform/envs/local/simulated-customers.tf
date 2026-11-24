@@ -3,10 +3,11 @@
 
 # "Initech" usa um IdP OIDC corporativo (o papel que Entra ID / Google Workspace / Okta fariam).
 resource "keycloak_realm" "initech_idp" {
-  realm        = "initech-idp"
-  enabled      = true
-  display_name = "Initech SSO (simulado)"
-  ssl_required = "external"
+  realm                    = "initech-idp"
+  enabled                  = true
+  display_name             = "Initech SSO (simulado)"
+  ssl_required             = "external"
+  login_with_email_allowed = true
 }
 
 resource "keycloak_openid_client" "initech_broker" {

@@ -78,6 +78,8 @@ jobs:
 
       - name: Teste de fumaça
         run: python3 scripts/smoke-test.py
+        env:
+          SMOKE_VERBOSE: "1"
 
       - name: Logs (em caso de falha)
         if: failure()
