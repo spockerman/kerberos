@@ -1,0 +1,10 @@
+{
+  "_comment": "Identidade do sistema. Único lugar com nome e logo. Substituir os placeholders pela identidade oficial.",
+  "productName": "A DEFINIR",
+  "shortName": "A DEFINIR",
+  "logo": "logo.svg",
+  "logoMark": "logo-mark.svg",
+  "favicon": "logo-mark.svg",
+  "supportEmail": "A DEFINIR",
+  "placeholder": true
+}

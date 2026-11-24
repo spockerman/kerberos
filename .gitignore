@@ -1,0 +1,32 @@
+# Dependências e builds
+node_modules/
+dist/
+dist_keycloak/
+.next/
+out/
+target/
+build/
+*.jar
+!**/gradle/wrapper/*.jar
+!**/.mvn/wrapper/*.jar
+
+# Terraform / OpenTofu
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+.terraform.lock.hcl.bak
+
+# Segredos e ambiente local
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# IDE / SO
+.idea/
+.vscode/
+*.iml
+.DS_Store
