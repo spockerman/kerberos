@@ -59,8 +59,6 @@ jobs:
 
       - name: Subir o ambiente
         run: docker compose up -d --build
-        env:
-          KC_LOG_LEVEL: "info,org.keycloak.storage.ldap:debug,org.keycloak.credential:debug,br.kerberos:debug,org.keycloak.organization:debug"
 
       - name: Aguardar Terraform e API
         run: |

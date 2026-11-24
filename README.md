@@ -56,6 +56,7 @@ Faz o login real pelo tema, valida o token (tenant, audience, roles) e o isolame
 ```bash
 docker compose up --build -d     # sobe em segundo plano
 docker compose logs -f keycloak  # acompanha os logs
+KC_LOG_LEVEL="info,org.keycloak.storage.ldap:debug" docker compose up -d keycloak  # logs detalhados de uma área
 docker compose run --rm terraform  # reaplica o Terraform depois de mudar infra/terraform
 docker compose down              # para (mantém os dados)
 docker compose down -v           # para e apaga banco e state (recomeça do zero)

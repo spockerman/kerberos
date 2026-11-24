@@ -19,6 +19,7 @@ resource "keycloak_openid_client" "initech_broker" {
 
   standard_flow_enabled        = true
   direct_access_grants_enabled = false
+  full_scope_allowed           = false
   valid_redirect_uris          = ["${local.keycloak_public_url}/realms/${module.realm.realm_name}/broker/initech-idp/endpoint"]
   valid_post_logout_redirect_uris = [
     "${local.keycloak_public_url}/realms/${module.realm.realm_name}/broker/initech-idp/endpoint/logout_response",
