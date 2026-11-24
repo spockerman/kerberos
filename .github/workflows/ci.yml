@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "feat/**", "fix/**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Builds e testes unitários
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Tema (Keycloakify) — tipos e build
+        working-directory: theme
+        run: npm ci && npm run build
+
+      - name: demo-web — tipos e build
+        working-directory: apps/demo-web
+        run: npm ci && npm run typecheck && npm run build
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+
+      - name: demo-api — testes unitários e regras de arquitetura (ArchUnit)
+        working-directory: apps/demo-api
+        run: mvn -B verify
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.17.2
+
+      - name: Terraform — formato e validação
+        run: |
+          terraform fmt -check -recursive infra/terraform
+          cd infra/terraform/envs/local
+          terraform init -backend=false -input=false
+          terraform validate
+
+  e2e:
+    name: Ponta a ponta (docker compose + login real)
+    runs-on: ubuntu-latest
+    needs: checks
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Subir o ambiente
+        run: docker compose up -d --build
+
+      - name: Aguardar Terraform e API
+        run: |
+          for i in $(seq 1 90); do
+            state=$(docker compose ps -a --format '{{.State}} {{.ExitCode}}' terraform || true)
+            case "$state" in
+              exited\ 0) echo "Terraform aplicado"; break ;;
+              exited*) echo "Terraform falhou: $state"; exit 1 ;;
+            esac
+            sleep 5
+          done
+          for i in $(seq 1 60); do
+            curl -fsS http://localhost:8081/actuator/health && exit 0
+            sleep 5
+          done
+          echo "API não ficou pronta"; exit 1
+
+      - name: Teste de fumaça
+        run: python3 scripts/smoke-test.py
+
+      - name: Logs (em caso de falha)
+        if: failure()
+        run: docker compose logs --no-color --tail=300

@@ -1,0 +1,20 @@
+server:
+  port: 8080
+
+# Configuração de identidade vem do ambiente (docker-compose / .env). Nada fixo no código.
+kerberos:
+  security:
+    # Emissor esperado no token (URL pública do Keycloak, a mesma que o navegador usa)
+    issuer: ${KEYCLOAK_ISSUER:http://localhost:8080/realms/demo}
+    # Onde buscar as chaves públicas (pode ser o endereço interno da rede Docker)
+    jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://localhost:8080/realms/demo/protocol/openid-connect/certs}
+    # A API só aceita tokens emitidos para ela
+    audience: ${API_AUDIENCE:demo-api}
+    # Front-ends autorizados a chamar a API (CORS)
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health

@@ -1,0 +1,27 @@
+{
+    "name": "kerberos-theme",
+    "version": "0.1.0",
+    "private": true,
+    "description": "Tema de login do Keycloak (Keycloakify) usando o design system do projeto",
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build": "tsc && vite build",
+        "build-keycloak-theme": "npm run build && keycloakify build"
+    },
+    "dependencies": {
+        "keycloakify": "11.16.4",
+        "react": "^18.3.1",
+        "react-dom": "^18.3.1"
+    },
+    "devDependencies": {
+        "@types/react": "^18.3.12",
+        "@types/react-dom": "^18.3.1",
+        "@vitejs/plugin-react": "^4.3.4",
+        "typescript": "^5.6.3",
+        "vite": "^5.4.11"
+    },
+    "engines": {
+        "node": ">=20.0.0"
+    }
+}
