@@ -10,7 +10,6 @@ Uso: python3 scripts/smoke-test.py   (só biblioteca padrão do Python 3)
 import base64
 import hashlib
 import html
-import http.cookiejar
 import json
 import os
 import re
@@ -42,16 +41,45 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+class Session:
+    """Cliente HTTP mínimo com cookies. O http.cookiejar do Python recusa cookies de "localhost"
+    (e os marcados Secure em HTTP), então guardamos os cookies aqui, como um navegador em dev faria."""
+
+    def __init__(self):
+        self.opener = urllib.request.build_opener(NoRedirect())
+        self.cookies = {}
+
+    def open(self, req, timeout):
+        if self.cookies:
+            req.add_header("Cookie", "; ".join(f"{k}={v}" for k, v in self.cookies.items()))
+        try:
+            resp = self.opener.open(req, timeout=timeout)
+        except urllib.error.HTTPError as e:
+            self._store(e.headers)
+            raise
+        self._store(resp.headers)
+        return resp
+
+    def _store(self, headers):
+        for header in headers.get_all("Set-Cookie") or []:
+            name, _, rest = header.partition("=")
+            value = rest.split(";", 1)[0]
+            if value:
+                self.cookies[name.strip()] = value
+            else:
+                self.cookies.pop(name.strip(), None)
+
+
 def new_opener():
-    jar = http.cookiejar.CookieJar()
-    return urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar), NoRedirect())
+    return Session()
 
 
 def request(opener, url, data=None, headers=None):
     body = urllib.parse.urlencode(data).encode() if data is not None else None
     req = urllib.request.Request(url, data=body, headers=headers or {})
     try:
-        with opener.open(req, timeout=20) as resp:
+        resp = opener.open(req, timeout=20)
+        with resp:
             return resp.status, dict(resp.headers), resp.read().decode()
     except urllib.error.HTTPError as e:
         return e.code, dict(e.headers), e.read().decode(errors="replace")
