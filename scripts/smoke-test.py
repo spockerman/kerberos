@@ -306,7 +306,12 @@ def portal_checks():
     if admin_token:
         terraform_realm, portal_realm = admin_realm(admin_token, "demo"), admin_realm(admin_token, "financeiro")
         diffs = [k for k in GOLDEN_KEYS if terraform_realm.get(k) != portal_realm.get(k)]
-        check(not diffs, "sem divergência: " + (", ".join(f"{k}: tf={terraform_realm.get(k)!r} portal={portal_realm.get(k)!r}" for k in diffs) or "ok"))
+        def default_roles(realm):
+            st, body = api(f"/admin/realms/{realm}/roles/default-roles-{realm}/composites", admin_token, base=KEYCLOAK)
+            return sorted((r["name"], r.get("clientRole", False)) for r in body) if st == 200 else None
+        if default_roles("demo") != default_roles("financeiro"):
+            diffs.append(f"defaultRoles: tf={default_roles('demo')} portal={default_roles('financeiro')}")
+        check(not diffs, "sem divergência: " + (", ".join(d if ":" in d else f"{d}: tf={terraform_realm.get(d)!r} portal={portal_realm.get(d)!r}" for d in diffs) or "ok"))
     else:
         check(False, f"token de admin para comparar realms (HTTP {status})")
 

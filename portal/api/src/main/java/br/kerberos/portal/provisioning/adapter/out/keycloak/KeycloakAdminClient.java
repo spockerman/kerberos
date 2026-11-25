@@ -90,6 +90,16 @@ public class KeycloakAdminClient {
                 .toBodilessEntity();
     }
 
+    /** DELETE com corpo (usado pela API de roles compostas). */
+    public void deleteWithBody(String path, Object body, Object... vars) {
+        http.method(org.springframework.http.HttpMethod.DELETE).uri("/admin" + path, vars)
+                .headers(h -> h.setBearerAuth(token()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(body)
+                .retrieve()
+                .toBodilessEntity();
+    }
+
     public void delete(String path, Object... vars) {
         try {
             http.delete().uri("/admin" + path, vars).headers(h -> h.setBearerAuth(token())).retrieve().toBodilessEntity();

@@ -75,10 +75,19 @@ public class KeycloakIdentityProvisioningAdapter implements IdentityProvisioning
         };
     }
 
+    /** Roles padrão de todo usuário novo: offline_access, uma_authorization e usuario — igual ao Terraform. */
     private void ensureDefaultRole(String realm) {
+        String defaultRoles = "default-roles-" + realm;
         Map<String, Object> role = keycloak.get("/realms/{realm}/roles/{role}", realm, GoldenRealmTemplate.DEFAULT_ROLE).orElseThrow();
         // Adicionar uma composta que já existe não tem efeito: idempotente
-        keycloak.post("/realms/{realm}/roles/{role}/composites", List.of(role), realm, "default-roles-" + realm);
+        keycloak.post("/realms/{realm}/roles/{role}/composites", List.of(role), realm, defaultRoles);
+
+        List<Map<String, Object>> extra = keycloak.list("/realms/{realm}/roles/{role}/composites", realm, defaultRoles).stream()
+                .filter(r -> !GoldenRealmTemplate.DEFAULT_ROLES.contains(String.valueOf(r.get("name"))) || Boolean.TRUE.equals(r.get("clientRole")))
+                .toList();
+        if (!extra.isEmpty()) {
+            keycloak.deleteWithBody("/realms/{realm}/roles/{role}/composites", extra, realm, defaultRoles);
+        }
     }
 
     private void ensureSpaClient(SystemSpec system) {

@@ -75,6 +75,9 @@ public final class GoldenRealmTemplate {
     /** Role atribuída automaticamente a todo usuário novo. */
     public static final String DEFAULT_ROLE = "usuario";
 
+    /** Composição de default-roles-<realm> (módulo Terraform: keycloak_default_roles). */
+    public static final List<String> DEFAULT_ROLES = List.of("offline_access", "uma_authorization", DEFAULT_ROLE);
+
     /** Escopos sempre presentes no token de um client de SPA (igual ao módulo spa-app). */
     public static final List<String> SPA_DEFAULT_SCOPES = List.of("basic", "profile", "email", "roles", "web-origins", "acr", "organization");
 
