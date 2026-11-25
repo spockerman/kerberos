@@ -38,6 +38,8 @@ services:
       KC_LOG_LEVEL: ${KC_LOG_LEVEL:-info}
     ports:
       - "8080:8080"
+      # portal-api compartilha a rede do Keycloak (ver serviço portal-api)
+      - "8082:8090"
     depends_on:
       postgres:
         condition: service_healthy
@@ -147,22 +149,24 @@ services:
     build:
       context: portal/api
     image: kerberos/portal-api:local
+    # A Admin API do Keycloak só aceita tokens emitidos pela URL pública (KC_HOSTNAME). Compartilhando a
+    # rede do Keycloak, "localhost:8080" aqui dentro é o próprio Keycloak — como para o navegador.
+    # A porta 8090 é publicada como 8082 no serviço keycloak. Em produção: KEYCLOAK_ADMIN_URL = URL pública.
+    network_mode: "service:keycloak"
     environment:
+      SERVER_PORT: "8090"
       PORTAL_DB_URL: jdbc:postgresql://portal-db:5432/portal
       PORTAL_DB_USER: portal
       PORTAL_DB_PASSWORD: ${PORTAL_DB_PASSWORD:-portal}
       PORTAL_ISSUER: http://localhost:8080/realms/plataforma
-      PORTAL_JWK_SET_URI: http://keycloak:8080/realms/plataforma/protocol/openid-connect/certs
+      PORTAL_JWK_SET_URI: http://localhost:8080/realms/plataforma/protocol/openid-connect/certs
       CORS_ALLOWED_ORIGINS: http://localhost:3001
-      # Admin API pela rede interna; URL pública vai no .env gerado
-      KEYCLOAK_ADMIN_URL: http://keycloak:8080
+      KEYCLOAK_ADMIN_URL: http://localhost:8080
       KEYCLOAK_PUBLIC_URL: http://localhost:8080
       KEYCLOAK_CLIENT_ID: portal-provisioner
       KEYCLOAK_CLIENT_SECRET: ${PORTAL_PROVISIONER_SECRET:-segredo-local-portal}
       KEYCLOAK_SMTP_HOST: mailpit
       KEYCLOAK_SMTP_PORT: "1025"
-    ports:
-      - "8082:8080"
     depends_on:
       portal-db:
         condition: service_healthy

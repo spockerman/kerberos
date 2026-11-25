@@ -273,8 +273,8 @@ def portal_checks():
     check(status == 200, f"atualizar cliente sem reenviar o segredo funciona (HTTP {status})")
 
     status, audit = api("/api/audit", token, base=PORTAL_API)
-    actions = {(e["action"], e["target"], e["actor"]) for e in audit} if status == 200 else set()
-    check(("SYSTEM_CREATED", "financeiro", "operador") in actions, "auditoria registra quem criou o sistema")
+    actions = {(e["action"], e["target"], e["actor"], e["outcome"]) for e in audit} if status == 200 else set()
+    check(("SYSTEM_CREATED", "financeiro", "operador", "SUCCESS") in actions, "auditoria registra quem criou o sistema")
     check(not any("segredo" in (e.get("detail") or "") for e in audit or []), "auditoria não contém segredos")
 
     print("Sistema criado pelo portal — login dos clientes")
