@@ -64,6 +64,15 @@ a:hover {
     width: auto;
     align-self: flex-start;
 }
+.kc-hero--brand {
+    justify-content: flex-end;
+}
+.kc-hero__brand {
+    /* Logo completo: mínimo de 48 px (design-system/brand/README.md); aqui é o destaque da tela */
+    height: clamp(56px, 9vw, 96px);
+    width: auto;
+    align-self: flex-start;
+}
 .kc-hero__name {
     margin: 0;
     font: var(--text-heading);

@@ -96,7 +96,7 @@ Atualize esta tabela ao concluir cada fase. Não adiante fases: construa sobre o
 | Front-end (portal e sistemas) | **React / Next.js** |
 | Tema de login | **Keycloakify** (React), usando os tokens de `design-system/tokens.css` |
 | Design system | `Loanza Design System.html` (raiz) → extraído para `design-system/`. Tema claro apenas, fonte Outfit. **Só referência de estilo** |
-| Identidade (nome, logo) | **Própria, a definir** — placeholders em `design-system/brand/brand.json` |
+| Identidade (nome, logo) | **Central 156** — conceito 6 · Tipográfico. Arquivos e regras de uso em `design-system/brand/` (logo completo só a partir de 48 px; abaixo, `logo-mark.svg`) |
 | Configuração do Keycloak | **Terraform 1.17.2** (imagem Docker, sem instalação local) + provider `keycloak/keycloak` `~> 5.11` |
 | Versões das apps | Spring Boot 4.1 + Java 21 · Next.js 16 + React 19 · Keycloakify 11 (React 18) · Node 22 |
 | Pré-requisito local | **Só Docker.** Tudo (inclusive Terraform, Maven e Node) roda em containers |

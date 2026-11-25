@@ -1,10 +1,12 @@
 {
-  "_comment": "Identidade do sistema. Único lugar com nome e logo. Substituir os placeholders pela identidade oficial.",
-  "productName": "A DEFINIR",
-  "shortName": "A DEFINIR",
+  "_comment": "Identidade do sistema. Único lugar com nome e logo; o tema e os front-ends leem daqui.",
+  "productName": "Central 156",
+  "shortName": "156",
   "logo": "logo.svg",
+  "logoInverse": "logo-inverse.svg",
   "logoMark": "logo-mark.svg",
-  "favicon": "logo-mark.svg",
+  "appIcon": "app-icon.svg",
+  "favicon": "app-icon.svg",
   "supportEmail": "A DEFINIR",
-  "placeholder": true
+  "placeholder": false
 }

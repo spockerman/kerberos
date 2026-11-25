@@ -42,6 +42,14 @@ export default function Template(props: TemplateProps<KcContext, I18n>) {
 
     useEffect(() => {
         document.title = documentTitle ?? msgStr("loginTitle", productName);
+
+        // Favicon da marca (design-system/brand/app-icon.svg)
+        const icon = document.createElement("link");
+        icon.rel = "icon";
+        icon.type = "image/svg+xml";
+        icon.href = brand.appIconUrl;
+        document.head.appendChild(icon);
+        return () => icon.remove();
     }, []);
 
     useSetClassName({ qualifiedName: "html", className: kcClsx("kcHtmlClass") });
@@ -57,9 +65,16 @@ export default function Template(props: TemplateProps<KcContext, I18n>) {
 
     return (
         <div className={clsx("kc-shell", kcClsx("kcLoginClass"))}>
-            <aside className="kc-hero" aria-hidden="true">
-                <img className="kc-hero__logo" src={brand.logoUrl} alt="" />
-                <p className="kc-hero__name">{productName}</p>
+            <aside className={clsx("kc-hero", !brand.isPlaceholder && "kc-hero--brand")} aria-hidden="true">
+                {brand.isPlaceholder ? (
+                    <>
+                        <img className="kc-hero__logo" src={brand.logoUrl} alt="" />
+                        <p className="kc-hero__name">{productName}</p>
+                    </>
+                ) : (
+                    // O logo completo já traz o nome: ele é o destaque da faixa
+                    <img className="kc-hero__brand" src={brand.logoUrl} alt="" />
+                )}
             </aside>
 
             <main className="kc-main">
