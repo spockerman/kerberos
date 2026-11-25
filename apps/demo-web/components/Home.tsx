@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "react-oidc-context";
 import { ApiError, demoApi, type Me, type TenantDashboard } from "@/lib/api";
-import logo from "@/app/_design-system/brand/logo.svg";
+import logo from "@/app/_design-system/brand/logo-mark.svg";
 
 type TenantResult = { tenant: string; data?: TenantDashboard; error?: string };
 
@@ -39,7 +39,7 @@ export function Home({ apiUrl }: { apiUrl: string }) {
     return (
         <main className="page">
             <header className="topbar">
-                <img src={logoSrc} alt="Logo" />
+                <img src={logoSrc} alt="Central 156" />
                 {auth.isAuthenticated ? (
                     <button className="btn btn--secondary" onClick={() => void auth.signoutRedirect()}>
                         Sair
