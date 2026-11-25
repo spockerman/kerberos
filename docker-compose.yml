@@ -1,6 +1,6 @@
 # Ambiente local completo. Único pré-requisito: Docker.
 #   docker compose up --build
-# Keycloak: http://localhost:8080 (admin/admin) · Demo: http://localhost:3000 · E-mails: http://localhost:8025
+# Keycloak: http://localhost:8080 (admin/admin) · Demo: http://localhost:3000 · Portal: http://localhost:3001 · E-mails: http://localhost:8025
 # Inclui clientes simulados para testar a federação: IdP OIDC (realm initech-idp) e LDAP (ldap-umbrella).
 name: kerberos
 
@@ -128,6 +128,64 @@ services:
       demo-api:
         condition: service_started
 
+  # ---------- Portal de provisionamento (Fase 3) ----------
+  portal-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: portal
+      POSTGRES_USER: portal
+      POSTGRES_PASSWORD: ${PORTAL_DB_PASSWORD:-portal}
+    volumes:
+      - portal-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U portal -d portal"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  portal-api:
+    build:
+      context: portal/api
+    image: kerberos/portal-api:local
+    environment:
+      PORTAL_DB_URL: jdbc:postgresql://portal-db:5432/portal
+      PORTAL_DB_USER: portal
+      PORTAL_DB_PASSWORD: ${PORTAL_DB_PASSWORD:-portal}
+      PORTAL_ISSUER: http://localhost:8080/realms/plataforma
+      PORTAL_JWK_SET_URI: http://keycloak:8080/realms/plataforma/protocol/openid-connect/certs
+      CORS_ALLOWED_ORIGINS: http://localhost:3001
+      # Admin API pela rede interna; URL pública vai no .env gerado
+      KEYCLOAK_ADMIN_URL: http://keycloak:8080
+      KEYCLOAK_PUBLIC_URL: http://localhost:8080
+      KEYCLOAK_CLIENT_ID: portal-provisioner
+      KEYCLOAK_CLIENT_SECRET: ${PORTAL_PROVISIONER_SECRET:-segredo-local-portal}
+      KEYCLOAK_SMTP_HOST: mailpit
+      KEYCLOAK_SMTP_PORT: "1025"
+    ports:
+      - "8082:8080"
+    depends_on:
+      portal-db:
+        condition: service_healthy
+      terraform:
+        condition: service_completed_successfully
+
+  portal-web:
+    build:
+      context: .
+      dockerfile: portal/web/Dockerfile
+    image: kerberos/portal-web:local
+    environment:
+      KEYCLOAK_URL: http://localhost:8080
+      KEYCLOAK_REALM: plataforma
+      KEYCLOAK_CLIENT_ID: portal-web
+      PORTAL_API_URL: http://localhost:8082
+    ports:
+      - "3001:3001"
+    depends_on:
+      portal-api:
+        condition: service_started
+
 volumes:
   postgres-data:
   terraform-state:
+  portal-data:

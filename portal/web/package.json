@@ -1,0 +1,28 @@
+{
+  "name": "portal-web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Portal de provisionamento: cria sistemas e clientes na plataforma de identidade",
+  "scripts": {
+    "sync-ds": "node scripts/sync-design-system.mjs",
+    "predev": "npm run sync-ds",
+    "dev": "next dev -p 3001",
+    "prebuild": "npm run sync-ds",
+    "build": "next build",
+    "start": "next start -p 3001",
+    "typecheck": "npm run sync-ds && tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "16.4.6",
+    "oidc-client-ts": "3.5.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "react-oidc-context": "3.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "typescript": "^5.9"
+  }
+}
