@@ -73,6 +73,15 @@ resource "keycloak_openid_client" "portal_provisioner" {
   direct_access_grants_enabled = false
 }
 
+# Desde o Keycloak 26.8 a Admin API só aceita tokens emitidos para ela: o escopo kc-admin-api
+# coloca o audience certo no token (o admin-cli já vem com ele).
+resource "keycloak_client_scope_assignments" "portal_provisioner" {
+  realm_id        = "master"
+  client_id       = keycloak_openid_client.portal_provisioner.id
+  default_scopes  = ["basic", "roles", "kc-admin-api"]
+  optional_scopes = []
+}
+
 resource "keycloak_openid_client_service_account_realm_role" "portal_create_realm" {
   realm_id                = "master"
   service_account_user_id = keycloak_openid_client.portal_provisioner.service_account_user_id
