@@ -30,3 +30,4 @@ crash.log
 .vscode/
 *.iml
 .DS_Store
+*.tsbuildinfo
