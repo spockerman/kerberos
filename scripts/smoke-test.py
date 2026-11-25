@@ -123,22 +123,23 @@ def form_action(page):
     return html.unescape(match.group(1)) if match else None
 
 
-def login(username, organization=None, expect_idp_host=None):
+def login(username, organization=None, expect_idp_host=None, realm=REALM, client_id=CLIENT_ID,
+          redirect_uri=REDIRECT_URI, scope="openid profile email organization"):
     """Login como um navegador faria. Segue redirecionamentos (inclusive para o IdP do cliente).
     Retorna o access token."""
     opener = new_opener()
     verifier = secrets.token_urlsafe(48)
     challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
     params = {
-        "client_id": CLIENT_ID,
-        "redirect_uri": REDIRECT_URI,
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
         "response_type": "code",
-        "scope": "openid profile email organization",
+        "scope": scope,
         "state": secrets.token_urlsafe(8),
         "code_challenge": challenge,
         "code_challenge_method": "S256",
     }
-    url = f"{KEYCLOAK}/realms/{REALM}/protocol/openid-connect/auth?" + urllib.parse.urlencode(params)
+    url = f"{KEYCLOAK}/realms/{realm}/protocol/openid-connect/auth?" + urllib.parse.urlencode(params)
     status, headers, page = request(opener, url)
     check(status == 200, f"[{username}] página de login abre (HTTP {status})")
     check("/login/kerberos/" in page, f"[{username}] página usa o tema 'kerberos'")
@@ -150,10 +151,10 @@ def login(username, organization=None, expect_idp_host=None):
         location = headers.get("Location") or headers.get("location")
         if status in (301, 302, 303) and location:
             url = urllib.parse.urljoin(url, location)
-            if url.startswith(REDIRECT_URI):
+            if url.startswith(redirect_uri):
                 code = urllib.parse.parse_qs(urllib.parse.urlparse(url).query).get("code", [None])[0]
                 break
-            if "/realms/" + REALM + "/" not in url:
+            if "/realms/" + realm + "/" not in url:
                 visited_idp = True
             status, headers, page = request(opener, url)
             continue
@@ -185,12 +186,12 @@ def login(username, organization=None, expect_idp_host=None):
 
     status, _, body = request(
         opener,
-        f"{KEYCLOAK}/realms/{REALM}/protocol/openid-connect/token",
+        f"{KEYCLOAK}/realms/{realm}/protocol/openid-connect/token",
         {
             "grant_type": "authorization_code",
-            "client_id": CLIENT_ID,
+            "client_id": client_id,
             "code": code,
-            "redirect_uri": REDIRECT_URI,
+            "redirect_uri": redirect_uri,
             "code_verifier": verifier,
         },
     )
@@ -198,13 +199,124 @@ def login(username, organization=None, expect_idp_host=None):
     return json.loads(body)["access_token"] if status == 200 else None
 
 
-def api(path, token=None):
+def api(path, token=None, base=None, body=None):
     headers = {"Authorization": f"Bearer {token}"} if token else {}
-    status, _, body = request(new_opener(), f"{API}{path}", headers=headers)
+    url = f"{base or API}{path}"
+    if body is not None:
+        headers["Content-Type"] = "application/json"
+        req = urllib.request.Request(url, data=json.dumps(body).encode(), headers=headers, method="POST")
+        try:
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                status, text = resp.status, resp.read().decode()
+        except urllib.error.HTTPError as e:
+            status, text = e.code, e.read().decode(errors="replace")
+    else:
+        status, _, text = request(new_opener(), url, headers=headers)
     try:
-        return status, json.loads(body)
+        return status, json.loads(text)
     except ValueError:
-        return status, body
+        return status, text
+
+
+PORTAL_API = os.environ.get("PORTAL_API_URL", "http://localhost:8082")
+PORTAL_WEB = os.environ.get("PORTAL_WEB_URL", "http://localhost:3001")
+KC_ADMIN = (os.environ.get("KC_ADMIN_USER", "admin"), os.environ.get("KC_ADMIN_PASSWORD", "admin"))
+
+# Configurações do template golden que o realm criado pelo portal precisa ter iguais ao realm do Terraform
+GOLDEN_KEYS = [
+    "loginTheme", "organizationsEnabled", "sslRequired", "registrationAllowed", "resetPasswordAllowed", "rememberMe",
+    "loginWithEmailAllowed", "duplicateEmailsAllowed", "verifyEmail", "passwordPolicy", "accessTokenLifespan",
+    "ssoSessionIdleTimeout", "ssoSessionMaxLifespan", "revokeRefreshToken", "refreshTokenMaxReuse",
+    "internationalizationEnabled", "supportedLocales", "defaultLocale", "bruteForceProtected", "permanentLockout",
+    "failureFactor", "waitIncrementSeconds", "quickLoginCheckMilliSeconds", "minimumQuickLoginWaitSeconds",
+    "maxFailureWaitSeconds", "maxDeltaTimeSeconds", "browserSecurityHeaders", "eventsEnabled", "eventsExpiration",
+    "eventsListeners", "adminEventsEnabled", "adminEventsDetailsEnabled",
+]
+
+
+def admin_realm(token, realm):
+    status, body = api(f"/admin/realms/{realm}", token, base=KEYCLOAK)
+    return body if status == 200 else {}
+
+
+def portal_checks():
+    print("Portal — operador cria sistema e clientes")
+    portal_login = dict(realm="plataforma", client_id="portal-web", redirect_uri=f"{PORTAL_WEB}/", scope="openid profile email")
+    token = login("operador", **portal_login)
+    if not token:
+        return
+    system = {"slug": "financeiro", "displayName": "Financeiro", "webBaseUrl": "http://localhost:3100",
+              "roles": ["auditor"], "multiTenant": True}
+    status, body = api("/api/systems", token, base=PORTAL_API, body=system)
+    check(status == 200 and body.get("webClientId") == "financeiro-web", f"portal cria o sistema financeiro (HTTP {status}: {str(body)[:200]})")
+    status, body = api("/api/systems", token, base=PORTAL_API, body=system)
+    check(status == 200, f"repetir o cadastro é idempotente (HTTP {status})")
+    status, env = api("/api/systems/financeiro/env", token, base=PORTAL_API)
+    check(status == 200 and "KEYCLOAK_CLIENT_ID=financeiro-web" in str(env) and "API_AUDIENCE=financeiro-api" in str(env),
+          f".env gerado com client e audience (HTTP {status})")
+
+    idp = f"{KEYCLOAK}/realms/initech-idp/protocol/openid-connect"
+    initech = {"alias": "initech", "name": "Initech", "domains": ["initech.test"], "loginMethod": "oidc",
+               "oidc": {"issuer": f"{KEYCLOAK}/realms/initech-idp", "authorizationUrl": f"{idp}/auth", "tokenUrl": f"{idp}/token",
+                        "jwksUrl": f"{idp}/certs", "userInfoUrl": f"{idp}/userinfo", "logoutUrl": f"{idp}/logout",
+                        "clientId": "kerberos-broker"},
+               "secret": "segredo-local-initech"}
+    status, body = api("/api/systems/financeiro/tenants", token, base=PORTAL_API, body=initech)
+    check(status == 200 and body.get("loginMethod") == "oidc", f"portal cadastra cliente Initech com IdP OIDC (HTTP {status}: {str(body)[:200]})")
+    umbrella = {"alias": "umbrella", "name": "Umbrella", "domains": ["umbrella.test"], "loginMethod": "ldap",
+                "ldap": {"connectionUrl": "ldap://ldap-umbrella:389", "usersDn": "ou=people,dc=umbrella,dc=test",
+                         "bindDn": "cn=admin,dc=umbrella,dc=test", "vendor": "openldap"},
+                "secret": "admin-umbrella"}
+    status, body = api("/api/systems/financeiro/tenants", token, base=PORTAL_API, body=umbrella)
+    check(status == 200 and body.get("loginMethod") == "ldap", f"portal cadastra cliente Umbrella com LDAP (HTTP {status}: {str(body)[:200]})")
+    status, body = api("/api/systems/financeiro/tenants", token, base=PORTAL_API, body=initech | {"secret": None})
+    check(status == 200, f"atualizar cliente sem reenviar o segredo funciona (HTTP {status})")
+
+    status, audit = api("/api/audit", token, base=PORTAL_API)
+    actions = {(e["action"], e["target"], e["actor"], e["outcome"]) for e in audit} if status == 200 else set()
+    check(("SYSTEM_CREATED", "financeiro", "operador", "SUCCESS") in actions, "auditoria registra quem criou o sistema")
+    check(not any("segredo" in (e.get("detail") or "") for e in audit or []), "auditoria não contém segredos")
+
+    print("Sistema criado pelo portal — login dos clientes")
+    app = dict(realm="financeiro", client_id="financeiro-web", redirect_uri="http://localhost:3100/")
+    token_d = login("diego@initech.test", expect_idp_host="initech-idp", **app)
+    if token_d:
+        claims = decode_jwt(token_d)
+        check(claims.get("organization") == ["initech"], f"[financeiro] organization = ['initech'] (veio {claims.get('organization')})")
+        aud = claims.get("aud") if isinstance(claims.get("aud"), list) else [claims.get("aud")]
+        check("financeiro-api" in aud, f"[financeiro] audience financeiro-api (veio {aud})")
+    token_e = login("eva", **app)
+    if token_e:
+        claims = decode_jwt(token_e)
+        check(claims.get("organization") == ["umbrella"], f"[financeiro] organization = ['umbrella'] (veio {claims.get('organization')})")
+        check("usuario" in claims.get("realm_access", {}).get("roles", []), "[financeiro] role padrão 'usuario' no token")
+
+    print("Portal — permissões")
+    token_v = login("visitante", **portal_login)
+    if token_v:
+        status, _ = api("/api/systems", token_v, base=PORTAL_API, body=system | {"slug": "intruso"})
+        check(status == 403, f"sem a role provisionador → 403 (HTTP {status})")
+    status, _ = api("/api/systems", None, base=PORTAL_API)
+    check(status == 401, f"portal sem token → 401 (HTTP {status})")
+
+    print("Template golden — portal (Java) igual ao Terraform")
+    status, _, body = request(new_opener(), f"{KEYCLOAK}/realms/master/protocol/openid-connect/token",
+                              {"grant_type": "password", "client_id": "admin-cli", "username": KC_ADMIN[0], "password": KC_ADMIN[1]})
+    admin_token = json.loads(body).get("access_token") if status == 200 else None
+    if admin_token:
+        terraform_realm, portal_realm = admin_realm(admin_token, "demo"), admin_realm(admin_token, "financeiro")
+        diffs = [k for k in GOLDEN_KEYS if terraform_realm.get(k) != portal_realm.get(k)]
+        def default_roles(realm):
+            st, body = api(f"/admin/realms/{realm}/roles/default-roles-{realm}/composites", admin_token, base=KEYCLOAK)
+            return sorted((r["name"], r.get("clientRole", False)) for r in body) if st == 200 else None
+        if default_roles("demo") != default_roles("financeiro"):
+            diffs.append(f"defaultRoles: tf={default_roles('demo')} portal={default_roles('financeiro')}")
+        check(not diffs, "sem divergência: " + (", ".join(d if ":" in d else f"{d}: tf={terraform_realm.get(d)!r} portal={portal_realm.get(d)!r}" for d in diffs) or "ok"))
+    else:
+        check(False, f"token de admin para comparar realms (HTTP {status})")
+
+    status, _, _ = request(new_opener(), PORTAL_WEB)
+    check(status == 200, f"portal-web responde (HTTP {status})")
 
 
 def main():
@@ -260,6 +372,8 @@ def main():
     print("Segurança da API")
     status, _ = api("/api/me")
     check(status == 401, f"sem token → 401 (HTTP {status})")
+
+    portal_checks()
 
     print("Front-end")
     status, _, _ = request(new_opener(), WEB)

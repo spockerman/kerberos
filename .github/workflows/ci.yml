@@ -29,6 +29,10 @@ jobs:
         working-directory: apps/demo-web
         run: npm ci && npm run typecheck && npm run build
 
+      - name: portal-web — tipos e build
+        working-directory: portal/web
+        run: npm ci && npm run typecheck && npm run build
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -37,6 +41,10 @@ jobs:
 
       - name: demo-api — testes unitários e regras de arquitetura (ArchUnit)
         working-directory: apps/demo-api
+        run: mvn -B verify
+
+      - name: portal-api — testes unitários e regras de arquitetura (ArchUnit)
+        working-directory: portal/api
         run: mvn -B verify
 
       - uses: hashicorp/setup-terraform@v3
@@ -79,11 +87,14 @@ jobs:
             esac
             sleep 5
           done
-          for i in $(seq 1 60); do
-            curl -fsS http://localhost:8081/actuator/health && exit 0
-            sleep 5
+          for svc in 8081 8082; do
+            ok=0
+            for i in $(seq 1 60); do
+              curl -fsS http://localhost:$svc/actuator/health && { ok=1; break; }
+              sleep 5
+            done
+            [ $ok = 1 ] || { echo "API na porta $svc não ficou pronta"; exit 1; }
           done
-          echo "API não ficou pronta"; exit 1
 
       - name: Teste de fumaça
         run: python3 scripts/smoke-test.py

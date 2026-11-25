@@ -30,3 +30,16 @@ variable "umbrella_ldap_password" {
   default     = "admin-umbrella"
   sensitive   = true
 }
+
+variable "portal_web_url" {
+  description = "URL do front-end do portal de provisionamento."
+  type        = string
+  default     = "http://localhost:3001"
+}
+
+variable "portal_provisioner_secret" {
+  description = "Segredo da conta de serviço do portal no realm master. SOMENTE ambiente local."
+  type        = string
+  default     = "segredo-local-portal"
+  sensitive   = true
+}

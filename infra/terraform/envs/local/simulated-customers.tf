@@ -2,6 +2,10 @@
 # Em produção, o IdP e o LDAP são do cliente; aqui ficam no mesmo Keycloak e num container OpenLDAP.
 
 # "Initech" usa um IdP OIDC corporativo (o papel que Entra ID / Google Workspace / Okta fariam).
+locals {
+  initech_broker_realms = [module.realm.realm_name, "financeiro"]
+}
+
 resource "keycloak_realm" "initech_idp" {
   realm                    = "initech-idp"
   enabled                  = true
@@ -20,10 +24,10 @@ resource "keycloak_openid_client" "initech_broker" {
   standard_flow_enabled        = true
   direct_access_grants_enabled = false
   full_scope_allowed           = false
-  valid_redirect_uris          = ["${local.keycloak_public_url}/realms/${module.realm.realm_name}/broker/initech-idp/endpoint"]
-  valid_post_logout_redirect_uris = [
-    "${local.keycloak_public_url}/realms/${module.realm.realm_name}/broker/initech-idp/endpoint/logout_response",
-  ]
+
+  # Realms que podem usar este IdP: o demo (Terraform) e o sistema criado pelo portal no teste ponta a ponta
+  valid_redirect_uris             = [for r in local.initech_broker_realms : "${local.keycloak_public_url}/realms/${r}/broker/initech-idp/endpoint"]
+  valid_post_logout_redirect_uris = [for r in local.initech_broker_realms : "${local.keycloak_public_url}/realms/${r}/broker/initech-idp/endpoint/logout_response"]
 }
 
 resource "keycloak_user" "initech_diego" {
