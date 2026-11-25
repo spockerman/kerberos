@@ -39,7 +39,8 @@ Componentes:
 | Tenant (cliente) | Organization + login do cliente: IdP OIDC/SAML ou LDAP | `infra/terraform/modules/tenant/` |
 | Clientes simulados | IdP e LDAP falsos para testar a federação localmente | `infra/terraform/envs/local/simulated-customers.tf`, `infra/local/` |
 | Ambientes | Composição dos módulos por ambiente (dev, hml, prd) | `infra/terraform/envs/` |
-| Portal de Provisionamento | Formulário web que cria realm/clients/organizations e gera o `.env` | `portal/` |
+| Portal de Provisionamento | `portal/api` (Spring Boot) + `portal/web` (Next.js): cria sistemas e clientes pela Admin API, gera o `.env`, audita | `portal/` |
+| Realm da plataforma | Realm `plataforma` (login do portal, role `provisionador`) e conta de serviço `portal-provisioner` | `infra/terraform/envs/local/platform.tf` |
 | Starters/SDKs | Bibliotecas que validam JWT, extraem tenant e checam roles | `starters/` |
 | Ambiente local | `docker-compose.yml` na raiz: Postgres, Keycloak, Terraform, Mailpit e app de exemplo | raiz |
 | App de exemplo | API Spring Boot (`demo-api`) e front Next.js (`demo-web`) que provam o fluxo ponta a ponta | `apps/` |
@@ -60,13 +61,15 @@ Componentes:
    as aplicações filtram dados por ele.
 4. **Federação por cliente** fica na Organization (IdP próprio: Entra ID, Google Workspace, SAML) ou via
    User Federation (LDAP/AD).
-5. **Configuração como código**: Terraform (provider oficial `keycloak/keycloak`) é a fonte da verdade.
+5. **Configuração como código**: Terraform (provider oficial `keycloak/keycloak`) é a fonte da verdade da **base da
+   plataforma** (template golden, realm `plataforma`, conta do portal, ambientes). **Sistemas e clientes criados pelo
+   portal** são geridos pelo portal via Admin API, com catálogo e auditoria no banco dele (ADR 0004).
    Exports JSON do console servem só como referência, nunca como mecanismo de deploy.
 6. **Tema aplicado pelo template**: o realm golden define `login_theme = "kerberos"`, então todo realm nasce
    com o layout da empresa, sem passo extra. (Não usamos o padrão global do servidor: ele vale para todos os
    tipos de tema — admin, conta — e o nosso só implementa login.)
-7. **Portal usa service account** com o mínimo de permissões (`realm-management` necessárias), nunca
-   o usuário admin do realm `master`.
+7. **Portal usa service account** (`portal-provisioner`) com o mínimo: só `create-realm` no `master` (o Keycloak dá a ela
+   a administração de cada realm que ela cria) e o escopo `kc-admin-api`. Nunca o usuário admin do `master`.
 8. **Arquitetura hexagonal (Ports and Adapters)** em todo código de aplicação (portal e starters). Ver seção 6.
 9. **Produção na AWS com custo mínimo** enquanto não houver exigência de alta disponibilidade. Ver seção 5.
 
@@ -80,7 +83,7 @@ Mudar qualquer item acima exige um ADR em `docs/adr/NNNN-titulo.md` (contexto, d
 |---|---|---|
 | 1 | Imagem Docker + tema + realm golden + ambiente local (v0.1) | ✅ concluída — CI ponta a ponta verde |
 | 2 | Organizations + federação por cliente (módulo `tenant`: IdP OIDC/SAML e LDAP) | ✅ concluída — OIDC e LDAP testados ponta a ponta; SAML sem teste automatizado |
-| 3 | Portal de provisionamento + geração do `.env` | ⬜ |
+| 3 | Portal de provisionamento (sistemas, clientes OIDC/LDAP/locais, `.env`, auditoria) | ✅ concluída — criação pelo portal e login no sistema novo testados ponta a ponta |
 | 4 | Starters e SDKs das stacks | ⬜ |
 
 Atualize esta tabela ao concluir cada fase. Não adiante fases: construa sobre o que já está estável.
@@ -100,7 +103,7 @@ Atualize esta tabela ao concluir cada fase. Não adiante fases: construa sobre o
 | Configuração do Keycloak | **Terraform 1.17.2** (imagem Docker, sem instalação local) + provider `keycloak/keycloak` `~> 5.11` |
 | Versões das apps | Spring Boot 4.1 + Java 21 · Next.js 16 + React 19 · Keycloakify 11 (React 18) · Node 22 |
 | Pré-requisito local | **Só Docker.** Tudo (inclusive Terraform, Maven e Node) roda em containers |
-| Banco | **PostgreSQL** |
+| Banco | **PostgreSQL** — um para o Keycloak, outro para o portal (`portal-db`, migrações com **Flyway**, acesso com `JdbcClient`) |
 | Produção | **AWS Lightsail** — instância de 4 GB rodando docker-compose (Keycloak + Postgres + proxy reverso com TLS), snapshots automáticos |
 | Infra da AWS como código | Terraform (provider `aws`), separado do Terraform do Keycloak |
 
@@ -186,9 +189,13 @@ de forma leve: regras e chamadas de API fora dos componentes de tela.
 - Mudança de layout = nova versão do JAR + nova tag da imagem Docker.
 
 ### Portal
-- Campos mínimos: nome do sistema, URLs de redirect/origens, tipo de app, roles iniciais, multi-tenant (sim/não).
-- Toda ação de provisionamento é **idempotente** e **auditada** (quem, quando, o quê).
-- Preferir disparar o pipeline Terraform a chamar a Admin API diretamente, para manter rastreabilidade.
+- Campos mínimos: nome do sistema, endereço do front-end, roles extras, multi-tenant (sim/não). Cliente: alias, nome, domínios e forma de login.
+- Toda ação de provisionamento é **idempotente** (repetir conserta o que faltar) e **auditada** (quem, quando, o quê, resultado).
+- Provisiona pela **Admin API** (ADR 0004). `GoldenRealmTemplate` (Java) é cópia do módulo `realm-golden`: mudou um, mude o outro
+  no mesmo PR — o teste ponta a ponta compara o realm criado pelo portal com o do Terraform e falha se divergirem.
+- Segredos dos clientes (client secret de IdP, senha de LDAP) vão direto ao Keycloak e **nunca** são gravados nem auditados.
+- Só quem tem a role `provisionador` no realm `plataforma` provisiona (regra no domínio: `Operator.assertCanProvision`).
+- Keycloak 26.8+: a Admin API só aceita tokens com o escopo `kc-admin-api` — todo client que chama a Admin API precisa dele.
 
 ### Git
 - Commits em português, no imperativo, com escopo: `feat(theme): ...`, `fix(terraform): ...`, `docs(adr): ...`.

@@ -20,9 +20,11 @@ Quando o serviço `terraform` terminar com `Apply complete!`, está tudo pronto:
 
 | O quê | Endereço | Acesso |
 |---|---|---|
+| **Portal de provisionamento** | http://localhost:3001 | `operador` / `Senha@Demo2026!` |
 | Aplicação de exemplo | http://localhost:3000 | usuários abaixo |
 | Keycloak (admin) | http://localhost:8080/admin | `admin` / `admin` |
 | API de exemplo | http://localhost:8081/api/me | precisa de token |
+| API do portal | http://localhost:8082/api/systems | precisa de token do realm `plataforma` |
 | E-mails enviados (Mailpit) | http://localhost:8025 | — |
 
 ### Usuários de teste (realm `demo`)
@@ -76,9 +78,26 @@ docker compose down -v           # para e apaga banco e state (recomeça do zero
 | `keycloak/providers/` | Extensões Java do Keycloak (mapper LDAP → Organization) |
 | `apps/demo-api/` | API Spring Boot em Ports and Adapters |
 | `apps/demo-web/` | Front-end Next.js com login OIDC |
+| `portal/api/` | API do portal (Spring Boot, Ports and Adapters, Admin API do Keycloak, Postgres) |
+| `portal/web/` | Front do portal (Next.js) |
 | `scripts/smoke-test.py` | Teste ponta a ponta |
 
-## Cadastrar um cliente (tenant)
+## Portal de provisionamento
+
+Em http://localhost:3001, entre com `operador` (tem a role `provisionador`; `visitante` entra mas não provisiona).
+
+1. **Novo sistema**: nome, endereço do front-end, roles extras e se é multi-tenant. O portal cria o realm com o
+   template da plataforma (tema, senha, força bruta, eventos, Organizations), o client do front (PKCE) e o audience da API.
+2. **.env do projeto**: na página do sistema, copie ou baixe. O time cola no projeto e começa pelas telas.
+3. **Clientes**: cadastre cada cliente com o IdP dele (OIDC), o LDAP dele ou usuários locais. Para OIDC, a página mostra a
+   URL de retorno a cadastrar no IdP do cliente.
+4. **Auditoria**: tudo o que foi feito, por quem e com qual resultado.
+
+Repetir um cadastro é seguro: o portal confere o que existe e só cria ou corrige o que faltar.
+
+## Cadastrar um cliente pelo Terraform (base da plataforma)
+
+Clientes dos sistemas criados pelo portal são cadastrados no portal. Para realms geridos pelo Terraform (como o `demo`):
 
 Cada cliente é um bloco do módulo `tenant` no ambiente (ex.: `infra/terraform/envs/local/main.tf`):
 
