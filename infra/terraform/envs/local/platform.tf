@@ -1,4 +1,4 @@
-# Plataforma: o realm do próprio portal de provisionamento (Central 156 — Plataforma de Identidade).
+# Plataforma: o realm do próprio portal de provisionamento (Kerberos — Plataforma de Identidade).
 # Quem entra aqui é o time interno; só a role "provisionador" cria sistemas e clientes.
 
 module "platform_realm" {

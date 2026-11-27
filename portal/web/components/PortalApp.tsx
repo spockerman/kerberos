@@ -6,6 +6,7 @@ import { WebStorageStateStore } from "oidc-client-ts";
 import type { PortalConfig } from "@/lib/config";
 import { Shell } from "./Shell";
 import logo from "@/app/_design-system/brand/logo.svg";
+import brand from "@/app/_design-system/brand/brand.json";
 
 /** Login no realm da plataforma (Authorization Code + PKCE, cliente público). */
 export function PortalApp({ config }: { config: PortalConfig }) {
@@ -43,7 +44,7 @@ function Gate({ apiUrl }: { apiUrl: string }) {
         <main className="shell">
             <section className="hero" style={{ minHeight: 360 }}>
                 <div>
-                    <img src={logoSrc} alt="Central 156" style={{ height: 72 }} />
+                    <img src={logoSrc} alt={brand.productName} style={{ height: 144 }} />
                     <h1 style={{ marginTop: 32 }}>Portal de Provisionamento</h1>
                     <p>Crie sistemas e cadastre clientes na plataforma de identidade, com o login no layout da empresa já pronto.</p>
                 </div>

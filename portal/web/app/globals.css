@@ -50,7 +50,7 @@ a {
     text-decoration: none;
 }
 .topbar__brand img {
-    height: 24px;
+    height: 32px;
 }
 .topbar__brand span {
     font: var(--text-caption);

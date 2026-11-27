@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "react-oidc-context";
 import { ApiError, demoApi, type Me, type TenantDashboard } from "@/lib/api";
 import logo from "@/app/_design-system/brand/logo-mark.svg";
+import brand from "@/app/_design-system/brand/brand.json";
 
 type TenantResult = { tenant: string; data?: TenantDashboard; error?: string };
 
@@ -39,7 +40,7 @@ export function Home({ apiUrl }: { apiUrl: string }) {
     return (
         <main className="page">
             <header className="topbar">
-                <img src={logoSrc} alt="Central 156" />
+                <img src={logoSrc} alt={brand.productName} />
                 {auth.isAuthenticated ? (
                     <button className="btn btn--secondary" onClick={() => void auth.signoutRedirect()}>
                         Sair

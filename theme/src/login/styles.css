@@ -65,13 +65,13 @@ a:hover {
     align-self: flex-start;
 }
 .kc-hero--brand {
-    justify-content: flex-end;
+    justify-content: center;
 }
 .kc-hero__brand {
-    /* Logo completo: mínimo de 48 px (design-system/brand/README.md); aqui é o destaque da tela */
-    height: clamp(56px, 9vw, 96px);
-    width: auto;
-    align-self: flex-start;
+    /* Logo completo (vertical): é o destaque da faixa */
+    width: min(70%, 320px);
+    height: auto;
+    align-self: center;
 }
 .kc-hero__name {
     margin: 0;
@@ -102,10 +102,12 @@ a:hover {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--space-3);
     margin-bottom: var(--space-8);
 }
 .kc-card__logo {
-    height: 24px;
+    height: 32px;
     width: auto;
 }
 .kc-title {
