@@ -37,9 +37,11 @@ services:
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD:-admin}
       KC_LOG_LEVEL: ${KC_LOG_LEVEL:-info}
     ports:
-      - "8080:8080"
+      # Só em 127.0.0.1: não expõe o admin local na rede e, no Docker Desktop, evita que as conexões cheguem com
+      # IP de origem público, o que faz o Keycloak exigir HTTPS ("HTTPS required").
+      - "127.0.0.1:8080:8080"
       # portal-api compartilha a rede do Keycloak (ver serviço portal-api)
-      - "8082:8090"
+      - "127.0.0.1:8082:8090"
     depends_on:
       postgres:
         condition: service_healthy
