@@ -4,7 +4,7 @@ Fonte visual da plataforma. Origem: `Loanza Design System.html` (raiz do repo), 
 
 > **O HTML é só referência de estilo.** "Loanza" e seu logo pertencem ao estudo de caso de outra empresa
 > (Rondesignlab) e **nunca** aparecem no produto, no código, em assets ou em textos.
-> A identidade do sistema (nome, logo, favicon) vive apenas em `brand/` e ainda está como placeholder.
+> A identidade da plataforma é **Kerberos** (nome, logo, favicon) e vive apenas em `brand/`.
 
 - `brand/` — nome, logo e favicon do sistema (`brand.json`). **Único lugar com identidade**; o resto do código lê daqui.
 - `tokens.css` — variáveis CSS. Única fonte de cores, tipografia, espaço, raio, sombra e movimento.

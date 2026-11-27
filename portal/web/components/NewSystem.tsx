@@ -124,7 +124,7 @@ export function NewSystem({ api }: { api: PortalApi }) {
                 <aside className="card">
                     <span className="label">O que o sistema recebe</span>
                     <ul className="muted" style={{ margin: 0, paddingLeft: 18, lineHeight: 1.9 }}>
-                        <li>Login no layout da empresa (tema Central 156)</li>
+                        <li>Login no layout da empresa (tema da plataforma)</li>
                         <li>Política de senha, proteção contra força bruta e tokens curtos</li>
                         <li>Roles admin, gestor e usuario</li>
                         <li>Auditoria de login e de administração</li>

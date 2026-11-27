@@ -9,6 +9,7 @@ import { NewSystem } from "./NewSystem";
 import { SystemDetail } from "./SystemDetail";
 import { AuditTrail } from "./AuditTrail";
 import logoMark from "@/app/_design-system/brand/logo-mark.svg";
+import brand from "@/app/_design-system/brand/brand.json";
 
 export function Shell({ apiUrl }: { apiUrl: string }) {
     const auth = useAuth();
@@ -23,7 +24,7 @@ export function Shell({ apiUrl }: { apiUrl: string }) {
         <div className="shell">
             <header className="topbar">
                 <a className="topbar__brand" href={href({ name: "systems" })}>
-                    <img src={logoSrc} alt="Central 156" />
+                    <img src={logoSrc} alt={brand.productName} />
                     <span>Portal de Provisionamento</span>
                 </a>
                 <nav className="nav" aria-label="Seções">

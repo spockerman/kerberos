@@ -70,7 +70,7 @@ public class SystemProvisioningService implements RegisterSystem, QuerySystems {
     public String envFile(String slug) {
         SystemSpec system = load(slug).value();
         return EnvFile.forSystem(system, keycloakPublicUrl)
-                .render("Central 156 · Plataforma de Identidade — configuração do sistema " + system.displayName());
+                .render("Kerberos · Plataforma de Identidade — configuração do sistema " + system.displayName());
     }
 
     private Stamped<SystemSpec> load(String slug) {

@@ -99,7 +99,7 @@ Atualize esta tabela ao concluir cada fase. Não adiante fases: construa sobre o
 | Front-end (portal e sistemas) | **React / Next.js** |
 | Tema de login | **Keycloakify** (React), usando os tokens de `design-system/tokens.css` |
 | Design system | `Loanza Design System.html` (raiz) → extraído para `design-system/`. Tema claro apenas, fonte Outfit. **Só referência de estilo** |
-| Identidade (nome, logo) | **Central 156** — conceito 6 · Tipográfico. Arquivos e regras de uso em `design-system/brand/` (logo completo só a partir de 48 px; abaixo, `logo-mark.svg`) |
+| Identidade (nome, logo) | **Kerberos** (marca da plataforma). Arquivos e regras de uso em `design-system/brand/` (lockup vertical no login; horizontal em cabeçalhos) |
 | Configuração do Keycloak | **Terraform 1.17.2** (imagem Docker, sem instalação local) + provider `keycloak/keycloak` `~> 5.11` |
 | Versões das apps | Spring Boot 4.1 + Java 21 · Next.js 16 + React 19 · Keycloakify 11 (React 18) · Node 22 |
 | Pré-requisito local | **Só Docker.** Tudo (inclusive Terraform, Maven e Node) roda em containers |
@@ -187,6 +187,7 @@ de forma leve: regras e chamadas de API fora dos componentes de tela.
 - Mudou o HTML do design system? Atualize `tokens.css` no mesmo PR.
 - **Nunca usar o nome "Loanza" nem o logo dela** (estudo de caso de terceiros). Nome, logo e favicon vêm só de `design-system/brand/`; trocar a identidade não pode exigir mudança de código.
 - Mudança de layout = nova versão do JAR + nova tag da imagem Docker.
+- **Decidido, a implementar na entrada do 156 (primeiro sistema):** a tela de login mantém a marca Kerberos e mostra também o nome do sistema acessado (`displayName` do realm).
 
 ### Portal
 - Campos mínimos: nome do sistema, endereço do front-end, roles extras, multi-tenant (sim/não). Cliente: alias, nome, domínios e forma de login.

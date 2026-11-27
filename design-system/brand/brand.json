@@ -1,7 +1,7 @@
 {
-  "_comment": "Identidade do sistema. Único lugar com nome e logo; o tema e os front-ends leem daqui.",
-  "productName": "Central 156",
-  "shortName": "156",
+  "_comment": "Identidade da plataforma. Único lugar com nome e logo; o tema e os front-ends leem daqui.",
+  "productName": "Kerberos",
+  "shortName": "Kerberos",
   "logo": "logo.svg",
   "logoInverse": "logo-inverse.svg",
   "logoMark": "logo-mark.svg",
